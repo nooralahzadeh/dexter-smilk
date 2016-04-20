@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+source scripts/config.sh
+
+mkdir -p $SPOT_FOLDER/ram
+$JAVA it.cnr.isti.hpc.dexter.cli.spot.ram.GenerateSpotsMinimalPerfectHashCLI  -output $SPOT_HASHES
+echo "uncompressing spot file $SPOT_FILE "
+
+
+
+
+
+
+

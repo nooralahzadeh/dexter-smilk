@@ -1,0 +1,29 @@
+
+Here you will find information to constrcut repository and set up the SMILK-dexter Named Entity linking tools as Web-services (smilkNel-rest Jersey Webapp)
+
+1- Construct the repository from the wikipedia dump
+ 	- Preparetion folder ---> prepare.sh  will provide you the repository in target language (en: English, fr: French):
+		- sh prepare.sh fr fr.data  ( will create required files in fr.data folder for French )
+		- sh prepare.sh en en.data  ( will create required files in en.data folder for English )
+
+2- Set the path to the repository folder in the dexter-config.xml as follow:
+ <models>
+    <default>fr</default>
+    <model>
+      <name>fr</name>
+      <path>/home/../fr.data</path>
+      <sparqlendpoint>http://fr.dbpedia.org/sparql</sparqlendpoint>
+      <access>local</access>
+    </model>
+    <model>
+      <name>en</name>
+      <path>/home/../en.data</path>
+      <sparqlendpoint>http://dbpedia.org/sparql</sparqlendpoint>
+      <access>local</access>
+      <!--http://dbpedia.org/sparql-->
+      <!--http://fr.dbpedia.org/sparql-->
+    </model>
+  </models>
+
+
+

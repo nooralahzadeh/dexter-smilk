@@ -1,0 +1,74 @@
+
+#!/usr/bin/env bash
+ 
+#create the jar file with all dependency by mvn assembly:assembly
+#mvn -Dmaven.test.skip=true assembly:assembly
+
+source ./scripts/smilk-scripts/config.sh
+
+LOG=DEBUG
+
+
+#Preparing dataset to test : annotation directory
+ANNOTATION_FOLDER=$DATA_DIR/KORE50_AIDA
+
+#Annotation result folder
+ANNOTATION_RESULT=/user/fnoorala/home/NetBeansProjects/neleval/TAK14
+
+
+fromPath=$ANNOTATION_RESULT/eval/
+toPath=$ANNOTATION_FOLDER/eval
+
+result=$ANNOTATION_RESULT/eval/system.evaluation
+
+## declare an array parameteres
+declare -a spotter=("oketokens")
+declare -a nerd=("stanfordwithoutcoref")
+declare -a disambiguator=("pagerank")
+declare -a relatedness=("milnewitten"
+declare -a lablesimilarity=("levenshtein")
+declare -a contextsimilarity=("en2vec-similarity-filter")
+
+ 
+
+declare -a alpha_linear=(0 0.1 0.2 0.3 0.4 0.5)
+declare -a beta_linear=(0 0.1 0.2 0.3 0.4 0.5)
+
+xmlconfige=dexter-conf.xml
+
+## now loop through the above array
+
+for s in "${spotter[@]}"
+do	
+echo "$s"
+xmlstarlet ed -L -u "/config/taggers/tagger[name='smilk']/spotter" -v $s  $xmlconfige
+if [ "$s" == "oketokens" ];
+then 
+	# nerd
+	for ner in "${nerd[@]}"
+	do
+	echo "$ner"
+	xmlstarlet ed -L -u "config/spotters/spotter[name='$s']/params/param[name='tools']/value" -v $ner  $xmlconfige
+	
+	echo "spoting and linking "
+	$JAVAP   fr.inria.wimmics.smilk.cli.SmilkKOREAnnotationTAK14CLI   $ANNOTATION_FOLDER/$1    $ANNOTATION_RESULT   $2
+
+
+	echo "evaluation"
+	cd ../../neleval
+
+	sh ./scripts/run_tac14_evaluation.sh  $ANNOTATION_RESULT/gold.xml $ANNOTATION_RESULT/gold.tab $ANNOTATION_RESULT/system/  $ANNOTATION_RESULT/eval/  4
+	
+	temp=$toPath/'temp'.$s.$ner
+	cp  $result  $toPath/'temp'.$s.$ner	
+	#cd "$fromPath" && xargs mv -t "$toPath" < "$result"
+	echo -e "${s} \t ${ner}" | cat - $temp > t && mv t $temp
+	#sed -i -e "1i \${s} \${ner} " "$temp"
+	cd  ../dexter/dexter-core
+	done
+	fi
+	
+done
+
+
+

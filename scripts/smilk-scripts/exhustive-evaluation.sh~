@@ -1,0 +1,322 @@
+
+#!/usr/bin/env bash
+ 
+#create the jar file with all dependency by mvn assembly:assembly
+#mvn -Dmaven.test.skip=true assembly:assembly
+
+source ./scripts/smilk-scripts/config.sh
+
+LOG=DEBUG
+
+
+xmlconfige=dexter-conf.xml
+
+#Preparing dataset to test : annotation directory
+ANNOTATION_FOLDER=$DATA_DIR/KORE50_AIDA
+
+#Annotation result folder
+ANNOTATION_RESULT=/home/fnoorala/NetBeansProjects/neleval/TAK14
+
+
+fromPath=$ANNOTATION_RESULT/eval/
+toPath=$ANNOTATION_FOLDER/eval
+
+result=$ANNOTATION_RESULT/eval/system.evaluation
+
+endpoint="http://dbpedia.org/sparql"
+
+xmlstarlet ed -L -u "/config/models/model[name='en']/sparqlendpoint" -v $endpoint  $xmlconfige
+
+## declare an array variable
+declare -a spotter=("oketokens")
+declare -a nerd=("stanfordwithoutcoref")
+declare -a disambiguator=("pagerank")
+declare -a relatedness=("discoveryHub" "discovery-milnewitten")
+declare -a lablesimilarity=("levenshtein")
+declare -a contextsimilarity=("tfidf-similarity-filter")
+
+
+#Robust disambiguation of Named Entity linking in text (Max-Plank) 
+declare -a alpha=(0.43)
+declare -a beta=(0.47)
+if [ "$s" == "namedEntity-dbpedia" ]
+then
+	index=1
+else
+	index=3
+fi
+
+## now loop through the above array
+for s in "${spotter[@]}"
+do	
+echo "$s"
+xmlstarlet ed -L -u "/config/taggers/tagger[name='smilk']/spotter" -v $s  $xmlconfige
+if [ "$s" == "namedEntity" ]
+then 
+	# nerd
+	for ner in "${nerd[@]}"
+	do
+	echo "$ner"
+	xmlstarlet ed -L -u "config/spotters/spotter[name='$s']/params/param[name='tools']/value" -v $ner  $xmlconfige
+		 # relatedness
+		 for rel in "${relatedness[@]}"
+		 do
+		 echo "$rel"
+		 xmlstarlet ed -L -u "/config/taggers/tagger[name='smilk']/relatedness" -v $rel  $xmlconfige
+			
+			# lablesimilarity
+				for label in "${lablesimilarity[@]}"
+				do
+				echo "$label"
+				xmlstarlet ed -L -u "/config/similarities/similarity/labelsimilarity" -v $label  $xmlconfige
+				
+				# contextsimilarity
+					for cntx in "${contextsimilarity[@]}"
+					do
+					echo "$cntx"
+					xmlstarlet ed -L -u "/config/spotters/spotter[name='$s']/filters/filter[$index]/name" -v $cntx  $xmlconfige
+					
+						# disambiguator
+						for dis in "${disambiguator[@]}"
+						do
+						echo "$dis"
+			   		xmlstarlet ed -L -u "/config/taggers/tagger[name='smilk']/disambiguator" -v $dis  $xmlconfige
+						
+						if [ "$dis" == "pagerank" ]
+						then
+							for palph in 0.15
+							do
+							echo "$palph"
+				   			xmlstarlet ed -L -u "/config/disambiguators/disambiguator[name='$dis']/params/param[name='alpha']/value" -v $palph  $xmlconfige
+								# beta 
+								for beta in 0.25
+								do
+								echo "$beta"
+					   		xmlstarlet ed -L -u "/config/disambiguators/disambiguator[name='$dis']/params/param[name='beta']/value" -v $beta  $xmlconfige
+								# iteration 
+									for it in 100
+									do
+									echo "$it"
+									xmlstarlet ed -L -u "/config/disambiguators/disambiguator[name='$dis']/params/param[name='max-iteration']/value" -v $it  $xmlconfige						
+									echo "spoting and linking "
+									$JAVAP   fr.inria.wimmics.smilk.cli.SmilkKOREAnnotationTAK14CLI   $ANNOTATION_FOLDER/$1    $ANNOTATION_RESULT   $2
+									echo "evaluation"
+									cd ../../neleval
+									sh ./scripts/run_tac14_evaluation.sh  $ANNOTATION_RESULT/gold.xml $ANNOTATION_RESULT/gold.tab $ANNOTATION_RESULT/system/  $ANNOTATION_RESULT/eval/  4
+									temp=$toPath/'temp'.$s.$ner.$rel.$label.$cntx.$dis.$palph.$beta.$it.txt
+									cp  $result  $temp	
+									#cd "$fromPath" && xargs mv -t "$toPath" < "$result"
+									echo -e "${s}\t${ner}\t${rel}\t${label}\t${cntx}\t${dis}\t${palph}\t${beta}\t${it}" | cat - $temp > t && mv t $temp
+										#sed -i -e "1i \${s} \${ner} " "$temp"
+									rm   $ANNOTATION_RESULT/system/system.tab
+									cd ../dexter/dexter-core
+									done
+								done 										
+							done
+						else
+							for alph in "${alpha[@]}"
+							do
+							echo "$alph"
+				   		xmlstarlet ed -L -u "/config/disambiguators/disambiguator[name='$dis']/params/param[name='alpha']/value" -v $alph  $xmlconfige
+							# beta 
+								for beta in "${beta[@]}"
+								do
+								echo "$beta"
+								xmlstarlet ed -L -u "/config/disambiguators/disambiguator[name='$dis']/params/param[name='beta']/value" -v $beta  $xmlconfige
+													
+								echo "spoting and linking "
+								$JAVAP   fr.inria.wimmics.smilk.cli.SmilkOkeAnnotationTAK14CLI   $ANNOTATION_FOLDER/$1    $ANNOTATION_RESULT   $2
+
+								echo "evaluation"
+								cd ../../neleval
+								sh ./scripts/run_tac14_evaluation.sh  $ANNOTATION_RESULT/gold.xml $ANNOTATION_RESULT/gold.tab $ANNOTATION_RESULT/system/  $ANNOTATION_RESULT/eval/  4
+
+								temp=$toPath/'temp'.$s.$ner.$rel.$cntx.$dis.$alpha.$beta.txt
+								cp  $result  $temp	
+								#cd "$fromPath" && xargs mv -t "$toPath" < "$result"
+								echo -e "${s}\t${ner}\t${rel}\t${cntx}\t${dis}\t${alpha}\t${beta}" | cat - $temp > t && mv t $temp
+								#sed -i -e "1i \${s} \${ner} " "$temp"
+								rm   $ANNOTATION_RESULT/system/system.tab
+								cd  ../dexter/dexter-core	
+							done									
+							done
+						fi	 
+						done
+					done
+				done					
+			done
+	done			
+elif [ "$s" == "wiki-dictionary" ]
+then
+	# relatedness
+	for rel in "${relatedness[@]}"
+	do
+	echo "$rel"
+	xmlstarlet ed -L -u "/config/taggers/tagger[name='smilk']/relatedness" -v $rel  $xmlconfige
+	# lablesimilarity
+		for label in "${lablesimilarity[@]}"
+		do
+		echo "$label"
+		xmlstarlet ed -L -u "/config/similarities/similarity/labelsimilarity" -v $label  $xmlconfige	
+			# contextsimilarity
+			for cntx in "${contextsimilarity[@]}"
+			do
+			echo "$cntx"
+			xmlstarlet ed -L -u "/config/spotters/spotter[name='$s']/filters/filter[5]/name" -v $cntx  $xmlconfige	
+				# disambiguator
+				for dis in "${disambiguator[@]}"
+				do
+				echo "$dis"
+	   		xmlstarlet ed -L -u "/config/taggers/tagger[name='smilk']/disambiguator" -v $dis  $xmlconfige		
+				if [ "$dis" == "pagerank" ]
+				then
+					for palph in 0.15
+					do
+					echo "$palph"
+			   		xmlstarlet ed -L -u "/config/disambiguators/disambiguator[name='$dis']/params/param[name='alpha']/value" -v $palph  $xmlconfige
+					# beta 
+						for beta in 0.25
+						do
+						echo "$beta"
+				   		xmlstarlet ed -L -u "/config/disambiguators/disambiguator[name='$dis']/params/param[name='beta']/value" -v $beta  $xmlconfige
+							# iteration 
+							for it in 20 50 100
+							do
+							echo "$it"
+				   		xmlstarlet ed -L -u "/config/disambiguators/disambiguator[name='$dis']/params/param[name='max-iteration']/value" -v $it  $xmlconfige							
+							echo "spoting and linking "
+							$JAVAP   fr.inria.wimmics.smilk.cli.SmilkOkeAnnotationTAK14CLI   $ANNOTATION_FOLDER/$1    $ANNOTATION_RESULT   $2
+							echo "evaluation"
+							cd ../../neleval
+							sh ./scripts/run_tac14_evaluation.sh  $ANNOTATION_RESULT/gold.xml $ANNOTATION_RESULT/gold.tab $ANNOTATION_RESULT/system/  $ANNOTATION_RESULT/eval/  4
+							temp=$toPath/'temp'.$s.$rel.$label.$cntx.$dis.$palph.$beta.$it.txt
+							cp  $result  $temp	
+							#cd "$fromPath" && xargs mv -t "$toPath" < "$result"
+							echo -e "${s}\t${rel}\t${label}\t${cntx}\t${dis}\t${palph}\t${beta}\t${it}" | cat - $temp > t && mv t $temp
+							#sed -i -e "1i \${s} \${ner} " "$temp"
+							rm   $ANNOTATION_RESULT/system/system.tab
+							cd  ../dexter/dexter-core
+							done
+						done 														
+					done
+				else
+					for alph in "${alpha[@]}"
+					do
+					echo "$alph"
+					xmlstarlet ed -L -u "/config/disambiguators/disambiguator[name='$dis']/params/param[name='alpha']/value" -v $alph  $xmlconfige
+					# beta 
+						for beta in "${beta[@]}"
+						do
+						echo "$beta"
+			   		xmlstarlet ed -L -u "/config/disambiguators/disambiguator[name='$dis']/params/param[name='beta']/value" -v $beta  $xmlconfige				
+						echo "spoting and linking "
+						$JAVAP   fr.inria.wimmics.smilk.cli.SmilkOkeAnnotationTAK14CLI   $ANNOTATION_FOLDER/$1    $ANNOTATION_RESULT   $2
+						echo "evaluation"
+						cd ../../neleval
+						sh ./scripts/run_tac14_evaluation.sh  $ANNOTATION_RESULT/gold.xml $ANNOTATION_RESULT/gold.tab $ANNOTATION_RESULT/system/  $ANNOTATION_RESULT/eval/  4
+						temp=$toPath/'temp'.$s.$rel.$cntx.$dis.$alpha.$beta.txt
+						cp  $result  $temp	
+						#cd "$fromPath" && xargs mv -t "$toPath" < "$result"
+						echo -e "${s}\t${rel}\t${cntx}\t${dis}\t${alpha}\t${beta}" | cat - $temp > t && mv t $temp
+						rm   $ANNOTATION_RESULT/system/system.tab
+						#sed -i -e "1i \${s} \${ner} " "$temp"
+						cd  ../dexter/dexter-core	
+						done							
+					done
+				fi	 
+				done
+			done			
+		done
+	done
+else
+	# relatedness
+	for rel in "${relatedness[@]}"
+	do
+	echo "$rel"
+	xmlstarlet ed -L -u "/config/taggers/tagger[name='smilk']/relatedness" -v $rel  $xmlconfige
+			
+	# lablesimilarity
+		for label in "${lablesimilarity[@]}"
+		do
+		echo "$label"
+		xmlstarlet ed -L -u "/config/similarities/similarity/labelsimilarity" -v $label  $xmlconfige
+				
+		# contextsimilarity
+			for cntx in "${contextsimilarity[@]}"
+			do
+			echo "$cntx"
+			xmlstarlet ed -L -u "/config/spotters/spotter[name='$s']/filters/filter[2]/name" -v $cntx  $xmlconfige
+					
+			# disambiguator
+				for dis in "${disambiguator[@]}"
+				do
+				echo "$dis"
+		  		xmlstarlet ed -L -u "/config/taggers/tagger[name='smilk']/disambiguator" -v $dis  $xmlconfige
+						
+				if [ "$dis" == "pagerank" ]
+				then
+					for palph in 0.15
+					do
+					echo "$palph"
+		   			xmlstarlet ed -L -u "/config/disambiguators/disambiguator[name='$dis']/params/param[name='alpha']/value" -v $palph  $xmlconfige
+					# beta 
+						for beta in 0.25
+						do
+						echo "$beta"
+				   		xmlstarlet ed -L -u "/config/disambiguators/disambiguator[name='$dis']/params/param[name='beta']/value" -v $beta  $xmlconfige
+						# iteration 
+							for it in  100
+							do
+							echo "$it"
+							xmlstarlet ed -L -u "/config/disambiguators/disambiguator[name='$dis']/params/param[name='max-iteration']/value" -v $it  $xmlconfige						
+							echo "spoting and linking "
+							$JAVAP   fr.inria.wimmics.smilk.cli.SmilkKOREAnnotationTAK14CLI   $ANNOTATION_FOLDER/$1    $ANNOTATION_RESULT   $2
+							echo "evaluation"
+							cd ../../neleval
+							sh ./scripts/run_tac14_evaluation.sh  $ANNOTATION_RESULT/gold.xml $ANNOTATION_RESULT/gold.tab $ANNOTATION_RESULT/system/  $ANNOTATION_RESULT/eval/  4
+							temp=$toPath/'temp'.$s.$ner.$rel.$label.$cntx.$dis.$palph.$beta.$it.txt
+							cp  $result  $temp	
+							#cd "$fromPath" && xargs mv -t "$toPath" < "$result"
+							echo -e "${s}\t${ner}\t${rel}\t${label}\t${cntx}\t${dis}\t${palph}\t${beta}\t${it}" | cat - $temp > t && mv t $temp
+							#sed -i -e "1i \${s} \${ner} " "$temp"
+							rm   $ANNOTATION_RESULT/system/system.tab
+							cd ../dexter/dexter-core
+							done
+						done 										
+					done
+				else
+					for alph in "${alpha[@]}"
+					do
+					echo "$alph"
+			   		xmlstarlet ed -L -u "/config/disambiguators/disambiguator[name='$dis']/params/param[name='alpha']/value" -v $alph  $xmlconfige
+					# beta 
+						for beta in "${beta[@]}"
+						do
+						echo "$beta"
+						xmlstarlet ed -L -u "/config/disambiguators/disambiguator[name='$dis']/params/param[name='beta']/value" -v $beta  $xmlconfige								
+						echo "spoting and linking "
+						$JAVAP   fr.inria.wimmics.smilk.cli.SmilkOkeAnnotationTAK14CLI   $ANNOTATION_FOLDER/$1    $ANNOTATION_RESULT   $2
+						echo "evaluation"
+						cd ../../neleval
+						sh ./scripts/run_tac14_evaluation.sh  $ANNOTATION_RESULT/gold.xml $ANNOTATION_RESULT/gold.tab $ANNOTATION_RESULT/system/  $ANNOTATION_RESULT/eval/  4
+
+						temp=$toPath/'temp'.$s.$ner.$rel.$cntx.$dis.$alpha.$beta.txt
+						cp  $result  $temp	
+						#cd "$fromPath" && xargs mv -t "$toPath" < "$result"
+						echo -e "${s}\t${ner}\t${rel}\t${cntx}\t${dis}\t${alpha}\t${beta}" | cat - $temp > t && mv t $temp
+						#sed -i -e "1i \${s} \${ner} " "$temp"
+						rm   $ANNOTATION_RESULT/system/system.tab
+						cd  ../dexter/dexter-core	
+						done									
+					done
+				fi
+				done	 
+			done
+		done
+	done		
+fi
+done
+
+
+
+

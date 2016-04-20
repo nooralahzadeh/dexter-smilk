@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+source scripts/config.sh
+
+
+
+mv $TTTMP.gz $IN_EDGES
+
+echo "sorting by sorce"
+sort -nk1,1 -nk2,2 $TMP > $TTMP
+echo "generating outcoming link file in $OUT_EDGES"
+awk -F'	' 'BEGIN{current=$1; incoming=""} {if ($1 != $2) if ($1 == current) {incoming=incoming$2" "} else { print current"\t"incoming; current=$1; incoming=$2" "} } END {print current"\t"incoming}' $TTMP  > $TMP
+
+sed 1d $TMP > $TTMP
+gzip $TTMP 
+echo "compressing"
+mv $TTMP.gz $OUT_EDGES
+rm $TMP
+

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+source scripts/config.sh
+
+
+echo "indexing the titles for matching "
+$JAVA fr.inria.wimmics.smilk.cli.IndexingForApproximateMatchCLI --input $WIKI_JSON_DUMP 

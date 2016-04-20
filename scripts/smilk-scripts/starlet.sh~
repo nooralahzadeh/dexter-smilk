@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+ner="namedEntity"
+xmlstarlet ed -L -u "config/spotters/spotter[name='$ner']/params/param[name='tools']/value" -v "coref"  dexter-conf.xml
